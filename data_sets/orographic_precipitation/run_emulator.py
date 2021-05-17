@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
+from cf_units import Unit
 from netCDF4 import Dataset as NC
 import numpy as np
 import pandas as pd
+import pylab as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset
 from scipy.stats import dirichlet
-from sklearn.decomposition import PCA
 from tqdm import tqdm
 from time import time
+import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -28,6 +30,31 @@ def get_eigenvectors(omegas, F, cutoff=0.999):
     V = V.detach()[:, :cutoff_index]
     V_hat = V @ torch.diag(torch.sqrt(lamda_truncated))
     # A slight departure from the paper: Vhat is the
+    # eigenvectors scaled by the eigenvalue size.  This
+    # has the effect of allowing the outputs of the neural
+    # network to be O(1).  Otherwise, it doesn't make
+    # any difference.
+    end = time()
+    print(f"It took {end - start} seconds!")
+    return V_hat, F_bar, F_mean
+
+
+def get_eigenvectors_svd(omegas, F, cutoff=0.999):
+    start = time()
+    F_mean = (F * omegas).sum(axis=0)
+    F_bar = F - F_mean  # Eq. 28
+    Z = torch.diag(torch.sqrt(omegas.squeeze() * m_gridpoints))
+    U, S, V = torch.svd_lowrank(Z @ F_bar, q=100)
+    lamda = S ** 2 / (m_gridpoints)
+    # print(S.shape)
+
+    # lamda, V = torch.eig(S,eigenvectors=True) # Eq. 26
+    # lamda = lamda[:,0].squeeze()
+
+    cutoff_index = torch.sum(torch.cumsum(lamda / lamda.sum(), 0) < cutoff)
+    lamda_truncated = lamda.detach()[:cutoff_index]
+    V = V.detach()[:, :cutoff_index]
+    V_hat = V @ torch.diag(torch.sqrt(lamda_truncated))  # A slight departure from the paper: Vhat is the
     # eigenvectors scaled by the eigenvalue size.  This
     # has the effect of allowing the outputs of the neural
     # network to be O(1).  Otherwise, it doesn't make
@@ -193,6 +220,7 @@ def MALA(
     print("Running Metropolis-Adjusted Langevin Algorithm for model index {0}".format(model_index))
     print("***********************************************")
     print("***********************************************")
+    h_max = 10
     local_data = None
     vars = []
     acc = acc_target
@@ -200,7 +228,7 @@ def MALA(
         X, local_data, s = MALA_step(X, h, local_data=local_data)
         vars.append(X.detach())
         acc = beta * acc + (1 - beta) * s
-        h = min(h * (1 + k * np.sign(acc - acc_target)), 1)
+        h = min(h * (1 + k * np.sign(acc - acc_target)), h_max)
         if i % print_interval == 0:
             print("===============================================")
             print("sample: {0:d}, acc. rate: {1:4.2f}, log(P): {2:6.1f}".format(i, acc, local_data[0].item()))
@@ -209,10 +237,10 @@ def MALA(
 
         if i % save_interval == 0:
             print("///////////////////////////////////////////////")
-            print("Saving samples for model {0:03d}".format(model_index))
+            print(f"Saving samples for model {model_index}")
             print("///////////////////////////////////////////////")
             X_posterior = torch.stack(vars).cpu().numpy()
-            np.save(open(sample_path + "X_posterior_model_{0:03d}.npy".format(model_index), "wb"), X_posterior)
+            np.save(open(sample_path + f"X_posterior_model_{model_index}.npy", "wb"), X_posterior)
     X_posterior = torch.stack(vars).cpu().numpy()
     return X_posterior
 
@@ -224,7 +252,7 @@ def find_MAP(X, n_iters=50, print_interval=10):
     print("***********************************************")
     print("***********************************************")
     # Line search distances
-    alphas = np.logspace(-4, 0, 11)
+    alphas = np.logspace(-6, 0, 12)
     # Find MAP point
     for i in range(n_iters):
         log_pi, g, H, Hinv, log_det_Hinv = get_log_like_gradient_and_hessian(V, X, compute_hessian=True)
@@ -272,15 +300,35 @@ def V(X):
     return -(L1 + L2)
 
 
-grid_res = 4000
+output_dir = "2021_03_Ptest"
+
+dirs = {
+    "output": output_dir,
+    "emulator": "emulator_ensemble",
+    "posterior": "posterior",
+    "mala_samples": "mala_samples",
+}
+for d in ["emulator", "posterior"]:
+    dirs[d] = f"{output_dir}/{d}"
+for _, d in dirs.items():
+    if not os.path.isdir(d):
+        os.makedirs(d)
+
+
+n_iters = 15000
+n_models = 5  # To reproduce the paper, this should be 50
+grid_resolution = 4000
+stride = 2
+
 nc0 = NC("calibration_samples/ltop_calibration_sample_0.nc")
 m_gridpoints = len(nc0.variables["precipitation"][:].ravel())
 _, my, mx = nc0.variables["precipitation"][:].shape
+P_units = Unit(nc0.variables["precipitation"].units)
 nc0.close()
 
-ensemble_file = "ltop_calibration_samples_30.csv"
-samples = pd.read_csv(ensemble_file)
-X = samples.values[:, 1::]
+ensemble_file = "ltop_calibration_samples_100.csv"
+prior = pd.read_csv(ensemble_file)
+X = prior.values[:, 1::]
 m_samples, n_parameters = X.shape
 
 P = np.zeros((m_samples, my, mx))
@@ -293,9 +341,9 @@ for idx in tqdm(range(m_samples)):
     nc.close()
 
 P[P == 0] = 1e-5
-Precip = P[:, ::4, ::4].reshape(m_samples, -1)
+Precip = P[:, ::stride, ::stride].reshape(m_samples, -1)
 m_gridpoints_prunded = Precip.shape[1]
-point_area = np.ones(m_gridpoints_prunded) * grid_res ** 2
+point_area = np.ones(m_gridpoints_prunded) * grid_resolution ** 2
 
 X = torch.from_numpy(X)
 F_lin = torch.from_numpy(Precip)
@@ -322,81 +370,110 @@ n_hidden_2 = 128
 n_hidden_3 = 128
 n_hidden_4 = 128
 
-n_models = 3  # To reproduce the paper, this should be 50
-
-# for model_index in range(n_models):
-#     print(f"Running model {model_index+1}/{n_models}")
-#     omegas = torch.tensor(dirichlet.rvs(np.ones(m_samples)), dtype=torch.float, device=device).T
-
-#     V_hat, F_bar, F_mean = get_eigenvectors(omegas, F)
-#     n_eigenvectors = V_hat.shape[1]
-
-#     e = Emulator(n_parameters, n_eigenvectors, n_hidden_1, n_hidden_2, n_hidden_3, n_hidden_4, V_hat, F_mean)
-#     e.to(device)
-
-#     train_surrogate(e, X_hat, F_bar, omegas, normed_area)
-#     torch.save(e.state_dict(), f"emulator_ensemble/emulator_{model_index}.h5")
-
-
-nc = NC("../climate/MIROC-ESM-CHEM_Peninsula_4000m_clim_1995-2014.nc")
-P_rcm = nc.variables["precipitation"][:]
-P_obs = P_rcm[::4, ::4].ravel()
-nc.close()
-
-P_obs = torch.from_numpy(P_obs)
-P_obs = P_obs.to(device)
-
-models = []
 
 for model_index in range(n_models):
-    state_dict = torch.load(f"emulator_ensemble/emulator_{model_index}.h5")
-    e = Emulator(
-        state_dict["l_1.weight"].shape[1],
-        state_dict["V_hat"].shape[1],
-        n_hidden_1,
-        n_hidden_2,
-        n_hidden_3,
-        n_hidden_4,
-        state_dict["V_hat"],
-        state_dict["F_mean"],
-    )
-    e.load_state_dict(state_dict)
-    e.to(device)
-    e.eval()
-    models.append(e)
+    print(f"Running model {model_index+1}/{n_models}")
+    omegas = torch.tensor(dirichlet.rvs(np.ones(m_samples)), dtype=torch.float, device=device).T
 
-torch.manual_seed(0)
-np.random.seed(0)
+    V_hat_svd, F_bar_svd, F_mean_svd = get_eigenvectors_svd(omegas, F)
+    V_hat, F_bar, F_mean = get_eigenvectors(omegas, F)
+    n_eigenvectors = V_hat.shape[1]
+    break
+    # e = Emulator(n_parameters, n_eigenvectors, n_hidden_1, n_hidden_2, n_hidden_3, n_hidden_4, V_hat, F_mean)
+    # e.to(device)
+
+    # train_surrogate(e, X_hat, F_bar, omegas, normed_area)
+    # edir = dirs["emulator"]
+    # torch.save(e.state_dict(), f"{edir}/emulator_{model_index}.h5")
 
 
-sigma2 = 1 ** 2
+# nc = NC(f"../climate/MIROC-ESM-CHEM_Peninsula_{grid_resolution}m_clim_1995-2014.nc")
+# P_rcm = nc.variables["precipitation"]
+# P_rcm_units = Unit(P_rcm.units)
+# P_obs = P_rcm_units.convert(P_rcm[::stride, ::stride].ravel(), P_units)
+# nc.close()
 
-Sigma_obs = sigma2 * torch.eye(P_obs.shape[0], device=device)
-Sigma = Sigma_obs
+# P_obs = torch.from_numpy(P_obs)
+# P_obs = P_obs.to(device)
 
-rho = 1.0 / (grid_res ** 2)
-K = torch.diag(point_area * rho)
-Tau = K @ torch.inverse(Sigma) @ K
+# models = []
 
-from scipy.stats import beta
+# for model_index in range(n_models):
+#     edir = dirs["emulator"]
+#     state_dict = torch.load(f"{edir}/emulator_{model_index}.h5")
+#     e = Emulator(
+#         state_dict["l_1.weight"].shape[1],
+#         state_dict["V_hat"].shape[1],
+#         n_hidden_1,
+#         n_hidden_2,
+#         n_hidden_3,
+#         n_hidden_4,
+#         state_dict["V_hat"],
+#         state_dict["F_mean"],
+#     )
+#     e.load_state_dict(state_dict)
+#     e.to(device)
+#     e.eval()
+#     models.append(e)
 
-alpha_b = 3.0
-beta_b = 3.0
+# torch.manual_seed(0)
+# np.random.seed(0)
 
-X_min = X_hat.cpu().numpy().min(axis=0) - 1e-3
-X_max = X_hat.cpu().numpy().max(axis=0) + 1e-3
 
-X_prior = beta.rvs(alpha_b, beta_b, size=(10000, n_parameters)) * (X_max - X_min) + X_min
+# sigma2 = 100 ** 2
 
-X_min = torch.tensor(X_min, dtype=torch.float32, device=device)
-X_max = torch.tensor(X_max, dtype=torch.float32, device=device)
+# Sigma_obs = sigma2 * torch.eye(P_obs.shape[0], device=device)
+# Sigma = Sigma_obs
 
-for j, model in enumerate(models):
-    X = torch.tensor(
-        X_prior[np.random.randint(X_prior.shape[0], size=5)].mean(axis=0),
-        requires_grad=True,
-        dtype=torch.float,
-        device=device,
-    )
-    X = find_MAP(X)
-    X_posterior = MALA(X, n_iters=10000, model_index=j, save_interval=1000, print_interval=100)
+# rho = 1.0 / (grid_resolution ** 2)
+# K = torch.diag(point_area * rho)
+# Tau = K @ torch.inverse(Sigma) @ K
+
+# from scipy.stats import beta
+
+# alpha_b = 3.0
+# beta_b = 3.0
+
+# X_min = X_hat.cpu().numpy().min(axis=0) - 1e-3
+# X_max = X_hat.cpu().numpy().max(axis=0) + 1e-3
+
+# X_prior = beta.rvs(alpha_b, beta_b, size=(10000, n_parameters)) * (X_max - X_min) + X_min
+
+# X_min = torch.tensor(X_min, dtype=torch.float32, device=device)
+# X_max = torch.tensor(X_max, dtype=torch.float32, device=device)
+
+# X_posteriors = []
+# for j, model in enumerate(models):
+#     print("\n\n")
+#     print(f"Running model {j}")
+#     print("\n\n")
+#     X = torch.tensor(
+#         X_prior[np.random.randint(X_prior.shape[0], size=5)].mean(axis=0),
+#         requires_grad=True,
+#         dtype=torch.float,
+#         device=device,
+#     )
+#     X = find_MAP(X)
+#     sdir = dirs["mala_samples"]
+#     X_posterior = MALA(X, n_iters=n_iters, model_index=j, save_interval=1000, print_interval=100, sample_path=sdir)
+#     X_posteriors.append(X_posterior)
+
+# posterior = pd.DataFrame(data=10 ** X_posterior, columns=prior.columns[1::])
+
+# import pylab as plt
+# import seaborn as sns
+
+# fig, ax = plt.subplots(
+#     len(posterior.columns),
+#     1,
+#     figsize=[6.4, 24],
+# )
+# fig.subplots_adjust(hspace=0.5)
+
+# for k, param in enumerate(posterior.columns):
+#     print(k, param)
+#     sns.kdeplot(data=posterior, x=param, ax=ax[k], label="posterior")
+#     sns.kdeplot(data=prior, x=param, ax=ax[k], label="prior")
+
+# plt.legend()
+# fig.savefig("posterior_orographic_precip.pdf")

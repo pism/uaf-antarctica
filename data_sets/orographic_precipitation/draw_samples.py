@@ -29,11 +29,11 @@ outfile = options.OUTFILE[-1]
 distributions = {
     "wind_speed": uniform(loc=5, scale=25),  # uniform between 5 and 30
     "wind_direction": uniform(loc=200, scale=50),  # uniform between 200 and 250
-    "water_vapor_scale_height": uniform(loc=2000, scale=1000),  # uniform between 2000 and 3000
+    "water_vapor_scale_height": uniform(loc=1000, scale=2000),  # uniform between 1000 and 3000
     "conversion_time": uniform(loc=500, scale=2500),  # uniform between 500 and 3000
     "fallout_time": uniform(loc=500, scale=2500),  # uniform between 500 and 3000
     "scale_factor": uniform(loc=0.5, scale=0.5),  # uniform between 0.5 and 1
-    "background_precip_post": uniform(loc=0, scale=0.1),  # uniform between 0 and 0.1
+    "background_precip_post": uniform(loc=0, scale=0.2),  # uniform between 0 and 0.2
 }
 
 
