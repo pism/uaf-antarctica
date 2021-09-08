@@ -16,13 +16,18 @@ wget -nc https://secure.antarctica.ac.uk/data/bedmap2/${bedmap}.zip
 unzip -u ${bedmap}.zip
 
 gdal_translate -a_srs epsg:3031 bedrock.tif bedrock.nc
+gdal_translate bedmap2_tiff/bedmap2_bed.tif bedmap2_bed.nc
 
 
 infile=BedMachineAntarctica_2019-11-05_v01.nc
 for grid in 16000 8000 4000 2000 1000 500; do
-    if [ ! -f weights_${grid}m.nc ]; then
+    if [ ! -f machine_weights_${grid}m.nc ]; then
         echo "Preparing weights for ${grid}m grid"
-        cdo -f nc4 -z zip_2 -P $NN genycon,../grids/g${grid}m.txt $infile weights_${grid}m.nc
+        cdo -f nc4 -z zip_2 -P $NN genycon,../grids/g${grid}m.txt $infile machine_weights_${grid}m.nc
+    fi
+    if [ ! -f map_weights_${grid}m.nc ]; then
+        echo "Preparing weights for ${grid}m grid"
+        cdo -f nc4 -z zip_2 -P $NN genycon,../grids/g${grid}m.txt bedmap2_bed.nc map_weights_${grid}m.nc
     fi
     if [ ! -f pen_weights_${grid}m.nc ]; then
         echo "Preparing weights for ${grid}m grid"
@@ -30,10 +35,11 @@ for grid in 16000 8000 4000 2000 1000 500; do
     fi
 done
 
+
 for grid in 16000 8000 4000 2000 1000 500; do
     echo "Preparing ${grid}m grid"
     outfile=pism_BedMachineAntarctica_v01_g${grid}m.nc
-    cdo -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,weights_${grid}m.nc $infile $outfile
+    cdo -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,machine_weights_${grid}m.nc $infile $outfile
     # Make FTT mask: 1 where there is no floating (3) or grounded (2) ice
     ncap2 -O -s "where(thickness<0) thickness=0; ftt_mask[\$y,\$x]=0b; where(mask==0) {thickness=0.; surface=0.;}; where(mask!=2) ftt_mask=1; where(mask!=3) ftt_mask=1;" $outfile $outfile
     ncap2 -O -s 'land_ice_area_fraction_retreat = thickness; where(thickness > 0 || thickness + bed >= (1 - 910.0/1028.0) * thickness + 0) land_ice_area_fraction_retreat = 1;land_ice_area_fraction_retreat@units="1";land_ice_area_fraction_retreat@long_name="maximum ice extent mask";land_ice_area_fraction_retreat@standard_name="";' $outfile $outfile
@@ -45,9 +51,9 @@ for grid in 16000 8000 4000 2000 1000 500; do
     ncap2 -O -s "where(bed_hf!=-9999) {bed=bed_hf; thickness=(surface-bed_hf);}; where(thickness<0) {thickness=0;};" pism_BedMachineHFAntarctica_v01_g${grid}m.nc pism_BedMachineHFAntarctica_v01_g${grid}m.nc
     ncks -O -v bed_hf -x  pism_BedMachineHFAntarctica_v01_g${grid}m.nc  pism_BedMachineHFAntarctica_v01_g${grid}m.nc
     cp pism_BedMachineHFAntarctica_v01_g${grid}m.nc  pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
-    gdal_translate bedmap2_tiff/bedmap2_bed.tif bedmap2_bed.nc
-    cdo -f nc4 -z zip_2 -P $NN remapycon,../grids/g${grid}m.txt bedmap2_bed.nc bedmap2_bed_g${grid}m.nc
+    cdo -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,map_weights_${grid}m.nc bedmap2_bed.nc bedmap2_bed_g${grid}m.nc
     ncks -A -v Band1  bedmap2_bed_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
-    ncap2 -O -s "where(mask==0) bed=Band1;" pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
+    ncatted -a _FillValue,Band1,d,, -a missing_value,Band1,d,, pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
+    ncap2 -O -s "where((mask==0) && (Band1<30000.0)) bed=Band1;" pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
     ncks -O -v Band1 -x pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
 done
