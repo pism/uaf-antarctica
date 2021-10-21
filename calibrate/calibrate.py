@@ -189,7 +189,7 @@ if options.FILE is None:
 else:
     input_file = options.FILE[0]
 
-pism_dataname = f"$input_dir/data_sets/bed_dem/pism_BedMachineAntarctica_v{version}_{grid}m.nc"
+pism_dataname = f"$input_dir/data_sets/bed_dem/pism_BedMachineBedmapHFAntarctica_v{version}_{grid}m.nc"
 
 climate_file = "$input_dir/data_sets/climate_forcing/MIROC-ESM-CHEM_2km_clim_1995-2014.nc"
 
