@@ -1,0 +1,17 @@
+netcdf pism_overrides {
+    variables:
+    byte pism_overrides;
+
+    pism_overrides:stress_balance.sia.max_diffusivity = 100000.0;
+
+    pism_overrides:run_info.institution = "University of Alaska Fairbanks";
+
+    pism_overrides:output.backup_interval = 5.0;
+    
+    pism_overrides:surface.force_to_thickness.alpha = .1;
+
+    pism_overrides:surface.force_to_thickness.ice_free_alpha_factor = 5.0;
+
+    pism_overrides:geometry.ice_free_thickness_standard = 10.0;
+
+}

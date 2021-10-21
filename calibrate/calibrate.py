@@ -5,6 +5,7 @@ import itertools
 from collections import OrderedDict
 import csv
 import numpy as np
+import pandas as pd
 import os
 import sys
 import shlex
@@ -262,7 +263,9 @@ if system != "debug":
 # ########################################################
 
 tlftw = 0.1
-combinations = np.genfromtxt(ensemble_file, dtype=None, encoding=None, delimiter=",", skip_header=1)
+
+uq_df = pd.read_csv(ensemble_file)
+uq_df.fillna(False, inplace=True)
 
 tsstep = "yearly"
 
@@ -289,30 +292,16 @@ if restart_step > (simulation_end_year - simulation_start_year):
 
 batch_header, batch_system = make_batch_header(system, nn, walltime, queue)
 
-for n, combination in enumerate(combinations):
+for n, row in enumerate(uq_df.iterrows()):
+    combination = row[1]
+    print(combination)
 
-    (
-        m_id,
-        sia_e,
-        ssa_e,
-        ssa_n,
-        ppq,
-        tefo,
-        phi_min,
-        phi_max,
-        topg_min,
-        topg_max,
-        u_threshold,
-        sliding_law,
-        eigen_K,
-    ) = combination
-
-    ttphi = "{},{},{},{}".format(phi_min, phi_max, topg_min, topg_max)
+    ttphi = f"""{combination["phi_min"]},45,{combination["z_min"]},{combination["z_max"]}"""
 
     vversion = "v" + str(version)
 
     name_options = OrderedDict()
-    name_options["id"] = "{}".format(m_id)
+    name_options["id"] = combination["id"]
 
     full_exp_name = "_".join([vversion, "_".join(["_".join([k, str(v)]) for k, v in list(name_options.items())])])
     full_outfile = "g{grid}m_{experiment}.nc".format(grid=grid, experiment=full_exp_name)
@@ -393,15 +382,14 @@ for n, combination in enumerate(combinations):
                     grid_params_dict = generate_grid_description(grid, domain, restart=True)
 
                 sb_params_dict = {
-                    "sia_e": sia_e,
-                    "ssa_e": ssa_e,
-                    "ssa_n": ssa_n,
-                    "pseudo_plastic_q": ppq,
-                    "till_effective_fraction_overburden": tefo,
+                    "sia_e": combination["sia_e"],
+                    "ssa_e": combination["ssa_e"],
+                    "pseudo_plastic_q": combination["ppq"],
+                    "till_effective_fraction_overburden": combination["tefo"],
                     "vertical_velocity_approximation": vertical_velocity_approximation,
                     "basal_yield_stress.mohr_coulomb.till_log_factor_transportable_water": tlftw,
-                    "basal_resistance.pseudo_plastic.u_threshold": u_threshold,
-                    sliding_law: "",
+                    "basal_resistance.pseudo_plastic.u_threshold": combination["pseudo_plastic_uthreshold"],
+                    combination["sliding_law"]: "",
                 }
 
                 if start == simulation_start_year:
@@ -415,7 +403,7 @@ for n, combination in enumerate(combinations):
                 hydro_params_dict = generate_hydrology(hydrology)
 
                 calving_params_dict = generate_calving("eigen_calving")
-                calving_params_dict["calving.eigen_calving.K"] = eigen_K
+                calving_params_dict["calving.eigen_calving.K"] = combination["eigen_K"]
 
                 ocean_params_dict = {
                     "ocean": "pico",
