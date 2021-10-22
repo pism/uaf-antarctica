@@ -1,3 +1,2 @@
-id,SIAE,SSAE,SSAN,PPQ,TEFO,PHIMIN,PHIMAX,ZMIN,ZMAX,UTHRESH,SLDL,EIGENK
-0,2.0,0.6,3.0,0.75,0.02,15,40,-500,500,100,pseudo_plastic,1e15
-0,2.0,0.6,3.0,0.75,0.02,15,40,-500,500,100,pseudo_plastic,1e15
+id,sia_e,ssa_e,ppq,tefo,phi_min,z_min,z_max,pseudo_plastic_uthreshold,sliding_law,eigen_K
+CTRL,2.0,0.6,0.75,0.02,15,-500,500,100,pseudo_plastic,1e12

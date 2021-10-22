@@ -47,11 +47,27 @@ parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.description = "Generating scripts to calibrate Antarctic model."
 parser.add_argument("FILE", nargs=1, help="Input file to restart from", default=None)
 parser.add_argument(
-    "-n", "--n_procs", dest="n", type=int, help="""number of cores/processors. default=96.""", default=96
+    "-n",
+    "--n_procs",
+    dest="n",
+    type=int,
+    help="""number of cores/processors. default=96.""",
+    default=96,
 )
-parser.add_argument("-w", "--wall_time", dest="walltime", help="""walltime. default: 24:00:00.""", default="24:00:00")
 parser.add_argument(
-    "-q", "--queue", dest="queue", choices=list_queues(), help="""queue. default=long.""", default="t2standard"
+    "-w",
+    "--wall_time",
+    dest="walltime",
+    help="""walltime. default: 24:00:00.""",
+    default="24:00:00",
+)
+parser.add_argument(
+    "-q",
+    "--queue",
+    dest="queue",
+    choices=list_queues(),
+    help="""queue. default=long.""",
+    default="t2standard",
 )
 parser.add_argument(
     "-d",
@@ -61,7 +77,12 @@ parser.add_argument(
     help="sets the modeling domain",
     default="antarctica",
 )
-parser.add_argument("--exstep", dest="exstep", help="Writing interval for spatial time series", default=1)
+parser.add_argument(
+    "--exstep",
+    dest="exstep",
+    help="Writing interval for spatial time series",
+    default=1,
+)
 parser.add_argument(
     "-f",
     "--o_format",
@@ -71,9 +92,20 @@ parser.add_argument(
     default="netcdf4_serial",
 )
 parser.add_argument(
-    "-g", "--grid", dest="grid", type=int, choices=grid_choices, help="horizontal grid resolution", default=8000
+    "-g",
+    "--grid",
+    dest="grid",
+    type=int,
+    choices=grid_choices,
+    help="horizontal grid resolution",
+    default=8000,
 )
-parser.add_argument("--i_dir", dest="input_dir", help="input directory", default=abspath(join(script_directory, "..")))
+parser.add_argument(
+    "--i_dir",
+    dest="input_dir",
+    help="input directory",
+    default=abspath(join(script_directory, "..")),
+)
 parser.add_argument("--o_dir", dest="output_dir", help="output directory", default="test_dir")
 parser.add_argument(
     "--o_size",
@@ -114,7 +146,7 @@ parser.add_argument(
 parser.add_argument(
     "--stress_balance",
     dest="stress_balance",
-    choices=["sia", "ssa+sia", "ssa"],
+    choices=["sia", "ssa+sia", "ssa", "blatter"],
     help="stress balance solver",
     default="ssa+sia",
 )
@@ -138,6 +170,13 @@ parser.add_argument(
     dest="ensemble_file",
     help="File that has all combinations for ensemble study",
     default="../uq/ctrl.csv",
+)
+parser.add_argument(
+    "--climate",
+    dest="climate",
+    help="Climate",
+    choices=["flux", "relax"],
+    default="flux",
 )
 parser.add_argument(
     "-L",
@@ -169,7 +208,7 @@ ensemble_file = options.ensemble_file
 
 spatial_ts = options.spatial_ts
 
-climate = "flux"
+climate = options.climate
 exstep = options.exstep
 float_kill_calve_near_grounding_line = options.float_kill_calve_near_grounding_line
 grid = options.grid
@@ -191,9 +230,11 @@ else:
 
 pism_dataname = f"$input_dir/data_sets/bed_dem/pism_BedMachineBedmapHFAntarctica_v{version}_g{grid}m.nc"
 
-climate_file = "$input_dir/data_sets/climate_forcing/MIROC-ESM-CHEM_2km_clim_1995-2014.nc"
+climate_file = "$input_dir/data_sets/climate/MIROC-ESM-CHEM_2km_clim_1995-2014.nc"
 
 regridvars = "litho_temp,enthalpy,age,tillwat,bmelt,ice_area_specific_volume"
+if climate == "relax":
+    regridvars += ",thk"
 
 dirs = {"output": "$output_dir", "spatial_tmp": "$spatial_tmp_dir"}
 for d in ["performance", "state", "scalar", "spatial", "jobs", "basins"]:
@@ -215,7 +256,7 @@ if not os.path.isdir(exp_dir):
     os.makedirs(exp_dir)
 
 # generate the config file *after* creating the output directory
-pism_config = "calibrate_config"
+pism_config = "pism"
 pism_config_nc = join(output_dir, pism_config + ".nc")
 
 cmd = "ncgen -o {output} {input_dir}/config/{config}.cdl".format(
@@ -303,7 +344,12 @@ for n, row in enumerate(uq_df.iterrows()):
     name_options = OrderedDict()
     name_options["id"] = combination["id"]
 
-    full_exp_name = "_".join([vversion, "_".join(["_".join([k, str(v)]) for k, v in list(name_options.items())])])
+    full_exp_name = "_".join(
+        [
+            vversion,
+            "_".join(["_".join([k, str(v)]) for k, v in list(name_options.items())]),
+        ]
+    )
     full_outfile = "g{grid}m_{experiment}.nc".format(grid=grid, experiment=full_exp_name)
 
     # All runs in one script file for coarse grids that fit into max walltime
@@ -351,7 +397,10 @@ for n, row in enumerate(uq_df.iterrows()):
                 pism = generate_prefix_str(pism_exec)
 
                 general_params_dict = {
-                    "profile": join(dirs["performance"], "profile_${job_id}.py".format(**batch_system)),
+                    "profile": join(
+                        dirs["performance"],
+                        "profile_${job_id}.py".format(**batch_system),
+                    ),
                     "ys": start,
                     "ye": end,
                     "calendar": "365_day",
@@ -359,6 +408,20 @@ for n, row in enumerate(uq_df.iterrows()):
                     "o_format": oformat,
                     "output.compression_level": compression_level,
                     "config_override": "$config",
+                    "front_retreat_file": pism_dataname,
+                    "stress_balance.blatter.coarsening_factor": 4,
+                    "blatter_Mz": 17,
+                    "bp_ksp_type": "gmres",
+                    "bp_pc_type": "mg",
+                    "bp_pc_mg_levels": 3,
+                    "bp_mg_levels_ksp_type": "richardson",
+                    "bp_mg_levels_pc_type": "sor",
+                    "bp_mg_coarse_ksp_type": "preonly",
+                    "bp_mg_coarse_pc_type": "lu",
+                    "bp_snes_monitor_ratio": "",
+                    "bp_ksp_monitor": "",
+                    "stress_balance.ice_free_thickness_standard": 50,
+                    "stress_balance.blatter.use_eta_transform": "",
                 }
 
                 if start == simulation_start_year:
@@ -398,7 +461,11 @@ for n, row in enumerate(uq_df.iterrows()):
                 # If stress balance choice is made in file, overwrite command line option
                 stress_balance_params_dict = generate_stress_balance(stress_balance, sb_params_dict)
 
-                climate_params_dict = generate_climate(climate, force_to_thickness_file=pism_dataname)
+                climate_params_dict = generate_climate(
+                    climate,
+                    force_to_thickness_file=pism_dataname,
+                    surface_given_file=climate_file,
+                )
 
                 hydro_params_dict = generate_hydrology(hydrology)
 
@@ -411,7 +478,11 @@ for n, row in enumerate(uq_df.iterrows()):
                 }
 
                 scalar_ts_dict = generate_scalar_ts(
-                    outfile, tsstep, start=simulation_start_year, end=simulation_end_year, odir=dirs["scalar"]
+                    outfile,
+                    tsstep,
+                    start=simulation_start_year,
+                    end=simulation_end_year,
+                    odir=dirs["scalar"],
                 )
 
                 all_params_dict = merge_dicts(
@@ -442,7 +513,11 @@ for n, row in enumerate(uq_df.iterrows()):
 
                 template = "{mpido} {pism} {params}" + redirect
 
-                context = merge_dicts(batch_system, dirs, {"job_no": job_no, "pism": pism, "params": all_params})
+                context = merge_dicts(
+                    batch_system,
+                    dirs,
+                    {"job_no": job_no, "pism": pism, "params": all_params},
+                )
                 cmd = template.format(**context)
 
                 f.write(cmd)
@@ -457,7 +532,8 @@ for n, row in enumerate(uq_df.iterrows()):
                 if not spatial_ts == "none":
                     f_combined.write(
                         "mv {tmpfile} {ofile}\n".format(
-                            tmpfile=spatial_ts_dict["extra_file"], ofile=join(dirs["spatial"], "ex_" + outfile)
+                            tmpfile=spatial_ts_dict["extra_file"],
+                            ofile=join(dirs["spatial"], "ex_" + outfile),
                         )
                     )
                     f_combined.write("\n")

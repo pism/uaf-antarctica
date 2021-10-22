@@ -35,10 +35,10 @@ def generate_domain(domain):
     if domain.lower() in ("ant", "antarctica"):
         pism_exec = "pismr"
     elif domain.lower() in ("peninsula"):
-        x_min = -280000.0
-        x_max = 320000.0
-        y_min = -2410000.0
-        y_max = -2020000.0
+        x_min = -2711000.0
+        x_max = -1760000.0
+        y_min = 800000
+        y_max = 1760000.0
         pism_exec = """pismr -regional -x_range {x_min},{x_max} -y_range {y_min},{y_max}  -bootstrap -regional.zero_gradient true -regional.no_model_strip 4.5""".format(
             x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max
         )
@@ -60,13 +60,12 @@ spatial_ts_vars["ismip6"] = ["ismip6"]
 spatial_ts_vars["basic"] = [
     "basal_melt_rate_grounded",
     "beta",
+    "bmelt",
     "bwat",
     "dHdt",
     "diffusivity",
     "height_above_flotation",
     "grounding_line_flux",
-    "frontal_melt_rate",
-    "frontal_melt_retreat_rate",
     "ice_mass",
     "mask",
     "mass_fluxes",
@@ -77,8 +76,6 @@ spatial_ts_vars["basic"] = [
     "usurf",
     "velbase_mag",
     "velsurf_mag",
-    "vonmises_calving_rate",
-    "vonmises_stress",
 ]
 
 spatial_ts_vars["standard"] = [
@@ -277,8 +274,8 @@ def generate_grid_description(grid_resolution, domain, restart=False):
 
     if domain.lower() in ("ant", "antarctica"):
 
-        mx_max = 12832
-        my_max = 12832
+        mx_max = 12128
+        my_max = 12128
 
         resolution_max = 500
 
@@ -420,7 +417,7 @@ def generate_stress_balance(stress_balance, additional_params_dict):
 
     params_dict = OrderedDict()
     params_dict["stress_balance"] = stress_balance
-    if stress_balance in ("ssa+sia"):
+    if stress_balance in ("ssa+sia", "blatter"):
         params_dict["options_left"] = ""
         params_dict["cfbc"] = ""
         params_dict["kill_icebergs"] = ""
