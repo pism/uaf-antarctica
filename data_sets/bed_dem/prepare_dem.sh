@@ -54,6 +54,6 @@ for grid in 16000 8000 4000 2000 1000 500; do
     cdo -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,map_weights_${grid}m.nc bedmap2_bed.nc bedmap2_bed_g${grid}m.nc
     ncks -A -v Band1  bedmap2_bed_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
     ncatted -a _FillValue,Band1,d,, -a missing_value,Band1,d,, pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
-    ncap2 -O -s "where((mask==0) && (Band1<30000.0)) bed=Band1;" pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
+    ncap2 -O -s "where((mask==0) && (Band1<30000.0)) bed=Band1; where(mask==4) {bed=surface-thickness;};" pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
     ncks -O -v Band1 -x pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc pism_BedMachineBedmapHFAntarctica_v01_g${grid}m.nc
 done
