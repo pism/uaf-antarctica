@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2016-21 Andy Aschwanden
+# Copyright (C) 2016-22 Andy Aschwanden
 
 import itertools
 from collections import OrderedDict
@@ -106,7 +106,9 @@ parser.add_argument(
     help="input directory",
     default=abspath(join(script_directory, "..")),
 )
-parser.add_argument("--o_dir", dest="output_dir", help="output directory", default="test_dir")
+parser.add_argument(
+    "--o_dir", dest="output_dir", help="output directory", default="test_dir"
+)
 parser.add_argument(
     "--o_size",
     dest="osize",
@@ -186,9 +188,15 @@ parser.add_argument(
     default=2,
 )
 
-parser.add_argument("--start_year", dest="start_year", type=int, help="Simulation start year", default=0)
-parser.add_argument("--duration", dest="duration", type=int, help="Years to simulate", default=50)
-parser.add_argument("--step", dest="step", type=int, help="Step in years for restarting", default=50)
+parser.add_argument(
+    "--start_year", dest="start_year", type=int, help="Simulation start year", default=0
+)
+parser.add_argument(
+    "--duration", dest="duration", type=int, help="Years to simulate", default=50
+)
+parser.add_argument(
+    "--step", dest="step", type=int, help="Step in years for restarting", default=50
+)
 
 options = parser.parse_args()
 
@@ -237,7 +245,7 @@ if climate == "relax":
     regridvars += ",thk"
 
 dirs = {"output": "$output_dir", "spatial_tmp": "$spatial_tmp_dir"}
-for d in ["performance", "state", "scalar", "spatial", "jobs", "basins"]:
+for d in ["performance", "state", "scalar", "spatial", "jobs", "speeds"]:
     dirs[d] = "$output_dir/{dir}".format(dir=d)
 
 if spatial_ts == "none":
@@ -337,7 +345,9 @@ for n, row in enumerate(uq_df.iterrows()):
     combination = row[1]
     print(combination)
 
-    ttphi = f"""{combination["phi_min"]},45,{combination["z_min"]},{combination["z_max"]}"""
+    ttphi = (
+        f"""{combination["phi_min"]},45,{combination["z_min"]},{combination["z_max"]}"""
+    )
 
     vversion = "v" + str(version)
 
@@ -350,7 +360,9 @@ for n, row in enumerate(uq_df.iterrows()):
             "_".join(["_".join([k, str(v)]) for k, v in list(name_options.items())]),
         ]
     )
-    full_outfile = "g{grid}m_{experiment}.nc".format(grid=grid, experiment=full_exp_name)
+    full_outfile = "g{grid}m_{experiment}.nc".format(
+        grid=grid, experiment=full_exp_name
+    )
 
     # All runs in one script file for coarse grids that fit into max walltime
     script_combined = join(scripts_dir, "cc_g{}m_{}_j.sh".format(grid, full_exp_name))
@@ -366,7 +378,9 @@ for n, row in enumerate(uq_df.iterrows()):
             experiment = "_".join(
                 [
                     vversion,
-                    "_".join(["_".join([k, str(v)]) for k, v in list(name_options.items())]),
+                    "_".join(
+                        ["_".join([k, str(v)]) for k, v in list(name_options.items())]
+                    ),
                     "{}".format(start),
                     "{}".format(end),
                 ]
@@ -442,7 +456,9 @@ for n, row in enumerate(uq_df.iterrows()):
                 if start == simulation_start_year:
                     grid_params_dict = generate_grid_description(grid, domain)
                 else:
-                    grid_params_dict = generate_grid_description(grid, domain, restart=True)
+                    grid_params_dict = generate_grid_description(
+                        grid, domain, restart=True
+                    )
 
                 sb_params_dict = {
                     "sia_e": combination["sia_e"],
@@ -451,7 +467,9 @@ for n, row in enumerate(uq_df.iterrows()):
                     "till_effective_fraction_overburden": combination["tefo"],
                     "vertical_velocity_approximation": vertical_velocity_approximation,
                     "basal_yield_stress.mohr_coulomb.till_log_factor_transportable_water": tlftw,
-                    "basal_resistance.pseudo_plastic.u_threshold": combination["pseudo_plastic_uthreshold"],
+                    "basal_resistance.pseudo_plastic.u_threshold": combination[
+                        "pseudo_plastic_uthreshold"
+                    ],
                     combination["sliding_law"]: "",
                 }
 
@@ -459,7 +477,9 @@ for n, row in enumerate(uq_df.iterrows()):
                     sb_params_dict["topg_to_phi"] = ttphi
 
                 # If stress balance choice is made in file, overwrite command line option
-                stress_balance_params_dict = generate_stress_balance(stress_balance, sb_params_dict)
+                stress_balance_params_dict = generate_stress_balance(
+                    stress_balance, sb_params_dict
+                )
 
                 climate_params_dict = generate_climate(
                     climate,
@@ -504,7 +524,9 @@ for n, row in enumerate(uq_df.iterrows()):
 
                     all_params_dict = merge_dicts(all_params_dict, spatial_ts_dict)
 
-                all_params = " \\\n  ".join(["-{} {}".format(k, v) for k, v in list(all_params_dict.items())])
+                all_params = " \\\n  ".join(
+                    ["-{} {}".format(k, v) for k, v in list(all_params_dict.items())]
+                )
 
                 if system == "debug":
                     redirect = " 2>&1 | tee {jobs}/job_{job_no}.${job_id}"
@@ -541,6 +563,8 @@ for n, row in enumerate(uq_df.iterrows()):
                 regridfile = join(dirs["state"], outfile)
                 outfiles.append(outfile)
 
+            speedfile = join(dirs["speeds"], "velsurf_mag_" + outfile)
+            f_combined.write(f"ncks -4 -L 2 -v velsurf_mag {outfile} {speedfile}")
             f_combined.write(batch_system.get("footer", ""))
 
         scripts_combinded.append(script_combined)
