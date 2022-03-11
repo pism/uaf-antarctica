@@ -3,7 +3,6 @@ import pandas as pd
 import xarray as xr
 import os
 from optparse import OptionParser
-#from zarr import meta
 
 # This script was written to filter the data in a netcdf file based on the value of a field that is contained in a second netcdf file of the same shape
 
@@ -19,7 +18,7 @@ def main():
     allowed = args[3]                            # Allowed values for cordinate
     allowed = np.array(allowed.split(','),float) # Split str of allowed values, create list
                                                
-
+    
     with xr.open_dataset(fn1) as original, xr.open_dataset(fn2) as new:
         try : 
             original[coord] = new[coord]
@@ -27,9 +26,9 @@ def main():
             print(e)        
         data = original.where(original[coord].isin(allowed))
         if not (options.keep):
-            data = data.drop_vars(coord)
+            data = data.drop_vars([coord,'crs'])
 
-    data.to_netcdf(options.output)    
+    data.to_netcdf(path=options.output,format='NETCDF4')    
         
     
 

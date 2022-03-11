@@ -43,9 +43,9 @@ done
 for grid in 16000 8000 4000 2000 1000 500; do
     echo "Preparing ${grid}m grid"
     outfile=pism_BedMachineAntarctica_v01_g${grid}m.nc
-    cdo -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,machine_weights_${grid}m.nc -delname,mask,source $infile float.nc   # float vars
-    cdo -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,nn_machine_weights_${grid}m.nc -selname,mask,source $infile byte.nc # byte vars
-    cdo merge float.nc byte.nc $outfile
+    cdo -O -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,machine_weights_${grid}m.nc -delname,mask,source $infile float.nc   # float vars
+    cdo -O -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,nn_machine_weights_${grid}m.nc -selname,mask,source $infile byte.nc # byte vars
+    cdo -O merge float.nc byte.nc $outfile
     rm byte.nc float.nc
     # Make FTT mask: 1 where there is no floating (3) or grounded (2) ice
     ncap2 -O -s "where(thickness<0) thickness=0; ftt_mask[\$y,\$x]=0b; where(mask==0) {thickness=0.; surface=0.;}; where(mask!=2) ftt_mask=1; where(mask!=3) ftt_mask=1;" $outfile $outfile
