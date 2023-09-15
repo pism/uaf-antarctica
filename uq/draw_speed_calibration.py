@@ -11,7 +11,7 @@
 from argparse import ArgumentParser
 import numpy as np
 import pandas as pd
-from scipy.stats.distributions import truncnorm, gamma, uniform, randint
+from scipy.stats.distributions import uniform
 
 from SALib.sample import saltelli
 from pyDOE import lhs
@@ -34,7 +34,7 @@ parser.add_argument(
     type=str,
     choices=["lhs", "saltelli"],
     help="""number of samples to draw. default=saltelli.""",
-    default="saltelli",
+    default="lhs",
 )
 parser.add_argument("OUTFILE", nargs=1, help="Ouput file (CSV)", default="samples.csv")
 options = parser.parse_args()
@@ -45,8 +45,10 @@ sliding_law = options.sliding_law
 
 
 distributions = {
-    "sia_e": uniform(loc=1.0, scale=3.0),  # uniform between 1 and 4
+    "sia_e": uniform(loc=0.5, scale=3.5),  # uniform between 1 and 4
     "ssa_e": uniform(loc=0.5, scale=1.5),  # uniform between 1 and 2
+    "sia_n": uniform(loc=3.0, scale=1.0),  # uniform between 1 and 2
+    "ssa_n": uniform(loc=3.0, scale=0.5),  # uniform between 1 and 2
     "ppq": uniform(loc=0.25, scale=0.7),  # uniform between 0.25 and 0.95
     "tefo": uniform(loc=0.015, scale=0.045),  # uniform between 0.015 and 0.050
     "phi_min": uniform(loc=10.0, scale=20.0),  # uniform between  10 and 30
