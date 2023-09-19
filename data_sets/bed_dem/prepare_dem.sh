@@ -34,6 +34,6 @@ for grid in 16000 8000 4000 2000 1000 500; do
     cdo -O merge float_g${grid}m.nc byte_g${grid}m.nc $outfile
     rm  float_g${grid}m.nc  byte_g${grid}m.nc
     # Make FTT mask: 1 where there is no floating (3) or grounded (2) ice
-    ncap2 -O -s "where(thickness<0) thickness=0; ftt_mask[\$y,\$x]=0b; where(mask==0) {thickness=0.; surface=0.;}; where(mask!=2) ftt_mask=1; where(mask!=3) ftt_mask=1;" $outfile $outfile
+    ncap2 -O -s "where(thickness<0) thickness=0; ftt_mask[\$y,\$x]=0b; where(mask==0) {thickness=0.; surface=0.;}; where(mask!=2) ftt_mask=1; where(mask!=3) ftt_mask=1; where(mask==4) {bed=surface-thickness;};" $outfile $outfile
     ncap2 -O -s 'land_ice_area_fraction_retreat = thickness; where(thickness > 0 || thickness + bed >= (1 - 910.0/1028.0) * thickness + 0) land_ice_area_fraction_retreat = 1;land_ice_area_fraction_retreat@units="1";land_ice_area_fraction_retreat@long_name="maximum ice extent mask";land_ice_area_fraction_retreat@standard_name="";' $outfile $outfile
 done
