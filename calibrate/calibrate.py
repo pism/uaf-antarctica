@@ -89,7 +89,7 @@ parser.add_argument(
     dest="oformat",
     choices=["netcdf3", "netcdf4_parallel", "netcdf4_serial", "pnetcdf"],
     help="output format",
-    default="netcdf4_serial",
+    default="netcdf4_parallel",
 )
 parser.add_argument(
     "-g",
@@ -155,9 +155,9 @@ parser.add_argument(
 parser.add_argument(
     "--dataset_version",
     dest="version",
-    choices=["01"],
+    choices=["01", "3"],
     help="Input data set version",
-    default="01",
+    default="3",
 )
 parser.add_argument(
     "--vertical_velocity_approximation",
@@ -236,7 +236,7 @@ if options.FILE is None:
 else:
     input_file = options.FILE[0]
 
-pism_dataname = f"$input_dir/data_sets/bed_dem/pism_BedMachineBedmapHFAntarctica_v{version}_g{grid}m.nc"
+pism_dataname = f"$input_dir/data_sets/bed_dem/pism_BedMachineAntarctica_v{version}_g{grid}m.nc"
 
 climate_file = "$input_dir/data_sets/climate/MIROC-ESM-CHEM_2km_clim_1995-2014.nc"
 
