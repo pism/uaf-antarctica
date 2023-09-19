@@ -28,7 +28,7 @@ done
 
 for grid in 16000 8000 4000 2000 1000 500; do
     echo "Preparing ${grid}m grid"
-    outfile=pism_BedMachineAntarctica_v$ver_g${grid}m.nc
+    outfile=pism_BedMachineAntarctica_v${ver}_g${grid}m.nc
     cdo -v -O -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,machine_weights_${grid}m.nc -delname,mask,source $infile float_g${grid}m.nc   # float vars
     cdo -v -O -f nc4 -z zip_2 -P $NN remap,../grids/g${grid}m.txt,nn_machine_weights_${grid}m.nc -selname,mask,source $infile byte_g${grid}m.nc # byte vars
     cdo -O merge float_g${grid}m.nc byte_g${grid}m.nc $outfile
